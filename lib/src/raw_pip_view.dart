@@ -1,6 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'constants.dart';
+
+enum PIPViewSize {
+  medium,
+  small,
+}
 
 class RawPIPView extends StatefulWidget {
   final PIPViewCorner initialCorner;
@@ -33,12 +40,22 @@ class RawPIPView extends StatefulWidget {
 class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   late final AnimationController _toggleFloatingAnimationController;
   late final AnimationController _dragAnimationController;
+  late final AnimationController _scaleAnimationController;
+  late Animation<double> _scaleAnimation;
+
   late PIPViewCorner _corner;
   Offset _dragOffset = Offset.zero;
   var _isDragging = false;
   var _isFloating = false;
   Widget? _bottomWidgetGhost;
   Map<PIPViewCorner, Offset> _offsets = {};
+
+  PIPViewSize _pipViewState = PIPViewSize.small;
+
+  Size? _mediumSize;
+
+  Timer? _inactivityTimer;
+  static const Duration inactivityDuration = Duration(seconds: 5);
 
   @override
   void initState() {
@@ -51,6 +68,19 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     _dragAnimationController = AnimationController(
       duration: defaultAnimationDuration,
       vsync: this,
+    );
+
+    _scaleAnimationController = AnimationController(
+      duration:
+          const Duration(milliseconds: 300), // Duration for the scale animation
+      vsync: this,
+    );
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
+      CurvedAnimation(
+        parent: _scaleAnimationController,
+        curve: Curves.easeInOut,
+      ),
     );
   }
 
@@ -136,6 +166,48 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     });
   }
 
+  void _onSingleTap() {
+    if (_pipViewState == PIPViewSize.small) {
+      setState(() {
+        _pipViewState = PIPViewSize.medium;
+      });
+      _scaleAnimationController.forward(); // Start the scale-up animation
+      _startInactivityTimer(); // Start the inactivity timer
+    }
+  }
+
+  void _onDoubleTap() {
+    if (_pipViewState == PIPViewSize.medium) {
+      _scaleAnimationController.reverse(); // Reverse the scale animation
+      setState(() {
+        _pipViewState = PIPViewSize.small;
+      });
+    }
+    _inactivityTimer?.cancel(); // Cancel the inactivity timer
+  }
+
+  void _startInactivityTimer() {
+    _inactivityTimer?.cancel(); // Cancel existing timer if any
+    _inactivityTimer = Timer(inactivityDuration, () {
+      if (mounted) {
+        _scaleAnimationController.reverse(); // Reverse the scale animation
+        setState(() {
+          _pipViewState = PIPViewSize.small; // Minimize to small size
+        });
+      }
+    });
+  }
+
+  Size _getWidgetSize(double width, double height) {
+    switch (_pipViewState) {
+      case PIPViewSize.medium:
+        return _mediumSize!;
+      case PIPViewSize.small:
+      default:
+        return Size(width, height);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
@@ -151,6 +223,15 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
         final height = constraints.maxHeight;
         double? floatingWidth = widget.floatingWidth;
         double? floatingHeight = widget.floatingHeight;
+        // if (floatingWidth != null && floatingHeight != null) {
+        //   if (floatingWidth > floatingHeight) {
+        //     floatingWidth = 200.0;
+        //     floatingHeight = 100.0;
+        //   } else {
+        //     floatingWidth = 100.0;
+        //     floatingHeight = 200.0;
+        //   }
+        // } else
         if (floatingWidth == null && floatingHeight != null) {
           floatingWidth = width / height * floatingHeight;
         }
@@ -159,7 +240,11 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           floatingHeight = height / width * floatingWidth;
         }
 
-        final floatingWidgetSize = Size(floatingWidth, floatingHeight);
+        _mediumSize = Size(floatingWidth * 1.5, floatingHeight * 1.5);
+
+        final floatingWidgetSize =
+            _getWidgetSize(floatingWidth, floatingHeight);
+
         final fullWidgetSize = Size(width, height);
 
         _updateCornersOffsets(
@@ -217,10 +302,17 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                     begin: fullWidgetSize.height,
                     end: floatingWidgetSize.height,
                   ).transform(toggleFloatingAnimationValue);
-                  final scale = Tween<double>(
-                    begin: 1,
-                    end: scaledDownScale,
-                  ).transform(toggleFloatingAnimationValue);
+                  final scale = _pipViewState == PIPViewSize.medium
+                      ? _scaleAnimation.value
+                      : Tween<double>(
+                          begin: 1,
+                          end: scaledDownScale,
+                        ).transform(toggleFloatingAnimationValue);
+
+                  // final scale = _pipViewState == PIPViewState.medium
+                  //     ? _scaleAnimation.value
+                  //     : 1.0;
+
                   return Positioned(
                     left: floatingOffset.dx,
                     top: floatingOffset.dy,
@@ -229,7 +321,13 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                       onPanUpdate: _isFloating ? _onPanUpdate : null,
                       onPanCancel: _isFloating ? _onPanCancel : null,
                       onPanEnd: _isFloating ? _onPanEnd : null,
-                      onTap: widget.onTapTopWidget,
+                      onTap: _onSingleTap,
+                      onDoubleTap: () {
+                        _onDoubleTap();
+                        if (widget.onTapTopWidget != null) {
+                          widget.onTapTopWidget!();
+                        }
+                      },
                       child: Material(
                         elevation: 10,
                         borderRadius: BorderRadius.circular(borderRadius),

@@ -34,6 +34,10 @@ class PIPView extends StatefulWidget {
 class PIPViewState extends State<PIPView> with TickerProviderStateMixin {
   Widget? _bottomWidget;
 
+  void present() {
+    return presentBelow(SizedBox.shrink());
+  }
+
   void presentBelow(Widget widget) {
     dismissKeyboard(context);
     setState(() => _bottomWidget = widget);
