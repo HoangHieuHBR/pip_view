@@ -20,7 +20,10 @@ class RawPIPView extends StatefulWidget {
   // by wrapping the top widget with a gesture detector
   // causes the tap to be lost sometimes because it
   // is competing with the drag
-  final void Function()? onTapTopWidget;
+  final void Function()? onDoubleTapTopWidget;
+
+  // Notify parent widget when RawPIPView is interactive or not
+  final void Function(bool isInteractive)? onInteractionChange;
 
   const RawPIPView({
     Key? key,
@@ -30,7 +33,8 @@ class RawPIPView extends StatefulWidget {
     this.avoidKeyboard = true,
     this.topWidget,
     this.bottomWidget,
-    this.onTapTopWidget,
+    this.onDoubleTapTopWidget,
+    this.onInteractionChange,
   }) : super(key: key);
 
   @override
@@ -167,6 +171,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   }
 
   void _onSingleTap() {
+    _notifyInteraction(true);
     if (_pipViewState == PIPViewSize.small) {
       setState(() {
         _pipViewState = PIPViewSize.medium;
@@ -194,8 +199,15 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
         setState(() {
           _pipViewState = PIPViewSize.small; // Minimize to small size
         });
+        _notifyInteraction(false);
       }
     });
+  }
+
+  void _notifyInteraction(bool isInteractive) {
+    if (widget.onInteractionChange != null) {
+      widget.onInteractionChange!(isInteractive);
+    }
   }
 
   Size _getWidgetSize(double width, double height) {
@@ -240,7 +252,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           floatingHeight = height / width * floatingWidth;
         }
 
-        _mediumSize = Size(floatingWidth * 1.5, floatingHeight * 1.5);
+        _mediumSize = Size(floatingWidth * 2, floatingHeight * 2);
 
         final floatingWidgetSize =
             _getWidgetSize(floatingWidth, floatingHeight);
@@ -321,11 +333,13 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                       onPanUpdate: _isFloating ? _onPanUpdate : null,
                       onPanCancel: _isFloating ? _onPanCancel : null,
                       onPanEnd: _isFloating ? _onPanEnd : null,
-                      onTap: _onSingleTap,
+                      onTap: () {
+                        _onSingleTap();
+                      },
                       onDoubleTap: () {
                         _onDoubleTap();
-                        if (widget.onTapTopWidget != null) {
-                          widget.onTapTopWidget!();
+                        if (widget.onDoubleTapTopWidget != null) {
+                          widget.onDoubleTapTopWidget!();
                         }
                       },
                       child: Material(
