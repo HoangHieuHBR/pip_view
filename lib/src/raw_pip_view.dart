@@ -159,11 +159,14 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     _dragAnimationController.forward().whenCompleteOrCancel(() {
       _dragAnimationController.value = 0;
       _dragOffset = Offset.zero;
+
+      _startInactivityTimer();
     });
   }
 
   void _onPanStart(DragStartDetails details) {
     if (_isAnimating()) return;
+    _inactivityTimer?.cancel();
     setState(() {
       _dragOffset = _offsets[_corner]!;
       _isDragging = true;
@@ -182,6 +185,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   }
 
   void _onDoubleTap() {
+    _notifyInteraction(true);
     if (_pipViewState == PIPViewSize.medium) {
       _scaleAnimationController.reverse(); // Reverse the scale animation
       setState(() {
@@ -220,6 +224,80 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     }
   }
 
+  Widget buildMinimizedHeader() {
+    return Positioned(
+      top: 5,
+      right: 0,
+      left: 0,
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            color: Colors.white,
+            iconSize: 70,
+            onPressed: () {},
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.open_in_full),
+            color: Colors.white,
+            iconSize: 70,
+            onPressed: () {
+              // PIPView.of(context)?.stopFloating();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            color: Colors.white,
+            iconSize: 70,
+            onPressed: () {
+              // FloatingUtil.close();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildMinimizedFooter() {
+    return Positioned(
+      bottom: 5,
+      right: 0,
+      left: 0,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(
+              Icons.keyboard_double_arrow_left,
+            ),
+            color: Colors.white,
+            iconSize: 80,
+          ),
+          IconButton(
+            onPressed: () {
+              // _controller.play();
+            },
+            icon: const Icon(
+              Icons.play_arrow_rounded,
+            ),
+            color: Colors.white,
+            iconSize: 82,
+          ),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(
+              Icons.keyboard_double_arrow_right,
+            ),
+            color: Colors.white,
+            iconSize: 80,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
@@ -235,15 +313,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
         final height = constraints.maxHeight;
         double? floatingWidth = widget.floatingWidth;
         double? floatingHeight = widget.floatingHeight;
-        // if (floatingWidth != null && floatingHeight != null) {
-        //   if (floatingWidth > floatingHeight) {
-        //     floatingWidth = 200.0;
-        //     floatingHeight = 100.0;
-        //   } else {
-        //     floatingWidth = 100.0;
-        //     floatingHeight = 200.0;
-        //   }
-        // } else
+
         if (floatingWidth == null && floatingHeight != null) {
           floatingWidth = width / height * floatingHeight;
         }
@@ -252,7 +322,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           floatingHeight = height / width * floatingWidth;
         }
 
-        _mediumSize = Size(floatingWidth * 2, floatingHeight * 2);
+        _mediumSize = Size(floatingWidth * 1.5, floatingHeight * 1.5);
 
         final floatingWidgetSize =
             _getWidgetSize(floatingWidth, floatingHeight);
@@ -321,10 +391,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                           end: scaledDownScale,
                         ).transform(toggleFloatingAnimationValue);
 
-                  // final scale = _pipViewState == PIPViewState.medium
-                  //     ? _scaleAnimation.value
-                  //     : 1.0;
-
                   return Positioned(
                     left: floatingOffset.dx,
                     top: floatingOffset.dy,
@@ -366,7 +432,13 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                     ),
                   );
                 },
-                child: widget.topWidget,
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: widget.topWidget!),
+                    buildMinimizedHeader(),
+                    buildMinimizedFooter(),
+                  ],
+                ),
               ),
           ],
         );

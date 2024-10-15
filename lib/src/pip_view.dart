@@ -10,6 +10,7 @@ class PIPView extends StatefulWidget {
   final bool avoidKeyboard;
 
   final void Function(bool isInteractive)? onInteractionChange;
+  final void Function()? onDoubletapPIPView;
 
   final Widget Function(
     BuildContext context,
@@ -24,6 +25,7 @@ class PIPView extends StatefulWidget {
     this.floatingHeight,
     this.avoidKeyboard = true,
     this.onInteractionChange,
+    this.onDoubletapPIPView,
   }) : super(key: key);
 
   @override
@@ -63,7 +65,12 @@ class PIPViewState extends State<PIPView> with TickerProviderStateMixin {
               ],
             )
           : null,
-      onDoubleTapTopWidget: isFloating ? stopFloating : null,
+      onDoubleTapTopWidget: !isFloating
+          ? null
+          : () {
+              stopFloating();
+              widget.onDoubletapPIPView?.call();
+            },
       topWidget: IgnorePointer(
         ignoring: isFloating,
         child: Builder(
