@@ -9,6 +9,12 @@ enum PIPViewSize {
   small,
 }
 
+enum PIPViewAction {
+  play,
+  forward,
+  backward,
+}
+
 class RawPIPView extends StatefulWidget {
   final PIPViewCorner initialCorner;
   final double? floatingWidth;
@@ -25,6 +31,8 @@ class RawPIPView extends StatefulWidget {
   // Notify parent widget when RawPIPView is interactive or not
   final void Function(bool isInteractive)? onInteractionChange;
 
+  final void Function(PIPViewAction action)? onAction;
+
   const RawPIPView({
     Key? key,
     this.initialCorner = PIPViewCorner.topRight,
@@ -35,6 +43,7 @@ class RawPIPView extends StatefulWidget {
     this.bottomWidget,
     this.onDoubleTapTopWidget,
     this.onInteractionChange,
+    this.onAction,
   }) : super(key: key);
 
   @override
@@ -55,8 +64,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   Map<PIPViewCorner, Offset> _offsets = {};
 
   PIPViewSize _pipViewState = PIPViewSize.small;
-
-  Size? _mediumSize;
 
   Timer? _inactivityTimer;
   static const Duration inactivityDuration = Duration(seconds: 5);
@@ -214,10 +221,10 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     }
   }
 
-  Size _getWidgetSize(double width, double height) {
+  Size _getFullWidgetSize(double width, double height) {
     switch (_pipViewState) {
       case PIPViewSize.medium:
-        return _mediumSize!;
+        return Size(width * 1.5, height * 1.5);
       case PIPViewSize.small:
       default:
         return Size(width, height);
@@ -268,7 +275,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconButton(
-            onPressed: () {},
+            onPressed: () => widget.onAction?.call(PIPViewAction.backward),
             icon: const Icon(
               Icons.keyboard_double_arrow_left,
             ),
@@ -276,9 +283,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
             iconSize: 80,
           ),
           IconButton(
-            onPressed: () {
-              // _controller.play();
-            },
+            onPressed: () => widget.onAction?.call(PIPViewAction.play),
             icon: const Icon(
               Icons.play_arrow_rounded,
             ),
@@ -286,7 +291,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
             iconSize: 82,
           ),
           IconButton(
-            onPressed: () {},
+            onPressed: () => widget.onAction?.call(PIPViewAction.forward),
             icon: const Icon(
               Icons.keyboard_double_arrow_right,
             ),
@@ -322,12 +327,9 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           floatingHeight = height / width * floatingWidth;
         }
 
-        _mediumSize = Size(floatingWidth * 1.5, floatingHeight * 1.5);
+        final floatingWidgetSize = Size(floatingWidth, floatingHeight);
 
-        final floatingWidgetSize =
-            _getWidgetSize(floatingWidth, floatingHeight);
-
-        final fullWidgetSize = Size(width, height);
+        final fullWidgetSize = _getFullWidgetSize(width, height);
 
         _updateCornersOffsets(
           spaceSize: fullWidgetSize,
