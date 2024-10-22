@@ -9,12 +9,6 @@ enum PIPViewSize {
   small,
 }
 
-enum PIPViewAction {
-  play,
-  forward,
-  backward,
-}
-
 class RawPIPView extends StatefulWidget {
   final PIPViewCorner initialCorner;
   final double? floatingWidth;
@@ -31,7 +25,7 @@ class RawPIPView extends StatefulWidget {
   // Notify parent widget when RawPIPView is interactive or not
   final void Function(bool isInteractive)? onInteractionChange;
 
-  final void Function(PIPViewAction action)? onAction;
+  final void Function(PIPViewSize size)? onPIPViewSizeChange;
 
   const RawPIPView({
     Key? key,
@@ -43,7 +37,7 @@ class RawPIPView extends StatefulWidget {
     this.bottomWidget,
     this.onDoubleTapTopWidget,
     this.onInteractionChange,
-    this.onAction,
+    this.onPIPViewSizeChange,
   }) : super(key: key);
 
   @override
@@ -61,6 +55,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   var _isDragging = false;
   var _isFloating = false;
   Widget? _bottomWidgetGhost;
+  Size? _mediumSize;
   Map<PIPViewCorner, Offset> _offsets = {};
 
   PIPViewSize _pipViewState = PIPViewSize.small;
@@ -185,6 +180,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     if (_pipViewState == PIPViewSize.small) {
       setState(() {
         _pipViewState = PIPViewSize.medium;
+        widget.onPIPViewSizeChange?.call(_pipViewState);
       });
       _scaleAnimationController.forward(); // Start the scale-up animation
       _startInactivityTimer(); // Start the inactivity timer
@@ -197,6 +193,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
       _scaleAnimationController.reverse(); // Reverse the scale animation
       setState(() {
         _pipViewState = PIPViewSize.small;
+        widget.onPIPViewSizeChange?.call(_pipViewState);
       });
     }
     _inactivityTimer?.cancel(); // Cancel the inactivity timer
@@ -209,6 +206,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
         _scaleAnimationController.reverse(); // Reverse the scale animation
         setState(() {
           _pipViewState = PIPViewSize.small; // Minimize to small size
+          widget.onPIPViewSizeChange?.call(_pipViewState);
         });
         _notifyInteraction(false);
       }
@@ -221,86 +219,14 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     }
   }
 
-  Size _getFullWidgetSize(double width, double height) {
+  Size _getFloatingSize(double width, double height) {
     switch (_pipViewState) {
       case PIPViewSize.medium:
-        return Size(width * 1.5, height * 1.5);
+        return _mediumSize!;
       case PIPViewSize.small:
       default:
         return Size(width, height);
     }
-  }
-
-  Widget buildMinimizedHeader() {
-    return Positioned(
-      top: 5,
-      right: 0,
-      left: 0,
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            color: Colors.white,
-            iconSize: 70,
-            onPressed: () {},
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.open_in_full),
-            color: Colors.white,
-            iconSize: 70,
-            onPressed: () {
-              // PIPView.of(context)?.stopFloating();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            color: Colors.white,
-            iconSize: 70,
-            onPressed: () {
-              // FloatingUtil.close();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget buildMinimizedFooter() {
-    return Positioned(
-      bottom: 5,
-      right: 0,
-      left: 0,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            onPressed: () => widget.onAction?.call(PIPViewAction.backward),
-            icon: const Icon(
-              Icons.keyboard_double_arrow_left,
-            ),
-            color: Colors.white,
-            iconSize: 80,
-          ),
-          IconButton(
-            onPressed: () => widget.onAction?.call(PIPViewAction.play),
-            icon: const Icon(
-              Icons.play_arrow_rounded,
-            ),
-            color: Colors.white,
-            iconSize: 82,
-          ),
-          IconButton(
-            onPressed: () => widget.onAction?.call(PIPViewAction.forward),
-            icon: const Icon(
-              Icons.keyboard_double_arrow_right,
-            ),
-            color: Colors.white,
-            iconSize: 80,
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -327,9 +253,12 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           floatingHeight = height / width * floatingWidth;
         }
 
-        final floatingWidgetSize = Size(floatingWidth, floatingHeight);
+        _mediumSize = Size(floatingWidth * 1.5, floatingHeight * 1.5);
 
-        final fullWidgetSize = _getFullWidgetSize(width, height);
+        final floatingWidgetSize =
+            _getFloatingSize(floatingWidth, floatingHeight);
+
+        final fullWidgetSize = Size(width, height);
 
         _updateCornersOffsets(
           spaceSize: fullWidgetSize,
@@ -405,8 +334,9 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                         _onSingleTap();
                       },
                       onDoubleTap: () {
-                        _onDoubleTap();
-                        if (widget.onDoubleTapTopWidget != null) {
+                        if (widget.onDoubleTapTopWidget != null &&
+                            _pipViewState == PIPViewSize.medium) {
+                          _onDoubleTap();
                           widget.onDoubleTapTopWidget!();
                         }
                       },
@@ -434,13 +364,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                     ),
                   );
                 },
-                child: Stack(
-                  children: [
-                    Positioned.fill(child: widget.topWidget!),
-                    buildMinimizedHeader(),
-                    buildMinimizedFooter(),
-                  ],
-                ),
+                child: widget.topWidget,
               ),
           ],
         );
