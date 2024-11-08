@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'constants.dart';
 
 enum PIPViewSize {
+  full,
   medium,
   small,
 }
@@ -16,6 +17,7 @@ class RawPIPView extends StatefulWidget {
   final bool avoidKeyboard;
   final Widget? topWidget;
   final Widget? bottomWidget;
+  final PIPViewSize? pipViewState;
   // this is exposed because trying to watch onTap event
   // by wrapping the top widget with a gesture detector
   // causes the tap to be lost sometimes because it
@@ -35,6 +37,7 @@ class RawPIPView extends StatefulWidget {
     this.avoidKeyboard = true,
     this.topWidget,
     this.bottomWidget,
+    this.pipViewState,
     this.onDoubleTapTopWidget,
     this.onInteractionChange,
     this.onPIPViewSizeChange,
@@ -49,6 +52,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   late final AnimationController _dragAnimationController;
   late final AnimationController _scaleAnimationController;
   late Animation<double> _scaleAnimation;
+  late PIPViewSize _pipViewState;
 
   late PIPViewCorner _corner;
   Offset _dragOffset = Offset.zero;
@@ -57,8 +61,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   Widget? _bottomWidgetGhost;
   Size? _mediumSize;
   Map<PIPViewCorner, Offset> _offsets = {};
-
-  PIPViewSize _pipViewState = PIPViewSize.small;
 
   Timer? _inactivityTimer;
   static const Duration inactivityDuration = Duration(seconds: 5);
@@ -88,6 +90,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
         curve: Curves.easeInOut,
       ),
     );
+    _pipViewState = widget.pipViewState ?? PIPViewSize.full;
   }
 
   @override
@@ -349,16 +352,28 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                             color: Colors.transparent,
                             borderRadius: BorderRadius.circular(borderRadius),
                           ),
-                          width: width,
-                          height: height,
-                          child: Transform.scale(
-                            scale: scale,
-                            child: OverflowBox(
-                              maxHeight: fullWidgetSize.height,
-                              maxWidth: fullWidgetSize.width,
-                              child: child,
-                            ),
+                          // width: width,
+                          // height: height,
+                          width: _pipViewState == PIPViewSize.medium
+                              ? floatingWidgetSize.width
+                              : fullWidgetSize.width,
+                          height: _pipViewState == PIPViewSize.medium
+                              ? floatingWidgetSize.height
+                              : fullWidgetSize.height,
+                          child: OverflowBox(
+                            alignment: Alignment.center,
+                            maxHeight: fullWidgetSize.height,
+                            maxWidth: fullWidgetSize.width,
+                            child: child, // Child remains at its original scale
                           ),
+                          // Transform.scale(
+                          //   scale: scale,
+                          //   child: OverflowBox(
+                          //     maxHeight: fullWidgetSize.height,
+                          //     maxWidth: fullWidgetSize.width,
+                          //     child: child,
+                          //   ),
+                          // ),
                         ),
                       ),
                     ),
