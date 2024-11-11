@@ -18,11 +18,13 @@ class RawPIPView extends StatefulWidget {
   final Widget? topWidget;
   final Widget? bottomWidget;
   final PIPViewSize? pipViewState;
+
   // this is exposed because trying to watch onTap event
   // by wrapping the top widget with a gesture detector
   // causes the tap to be lost sometimes because it
   // is competing with the drag
   final void Function()? onDoubleTapTopWidget;
+  final void Function()? onCloseView;
 
   // Notify parent widget when RawPIPView is interactive or not
   final void Function(bool isInteractive)? onInteractionChange;
@@ -39,6 +41,7 @@ class RawPIPView extends StatefulWidget {
     this.bottomWidget,
     this.pipViewState,
     this.onDoubleTapTopWidget,
+    this.onCloseView,
     this.onInteractionChange,
     this.onPIPViewSizeChange,
   }) : super(key: key);
@@ -65,6 +68,8 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   Timer? _inactivityTimer;
   static const Duration inactivityDuration = Duration(seconds: 5);
 
+  bool _isOverCloseButton = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,13 +82,11 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
       duration: defaultAnimationDuration,
       vsync: this,
     );
-
     _scaleAnimationController = AnimationController(
       duration:
           const Duration(milliseconds: 300), // Duration for the scale animation
       vsync: this,
     );
-
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
       CurvedAnimation(
         parent: _scaleAnimationController,
@@ -96,6 +99,11 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(covariant RawPIPView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.pipViewState != widget.pipViewState) {
+      setState(() {
+        _pipViewState = widget.pipViewState ?? PIPViewSize.small;
+      });
+    }
     if (_isFloating) {
       if (widget.topWidget == null || widget.bottomWidget == null) {
         _isFloating = false;
@@ -131,6 +139,20 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
         _dragAnimationController.isAnimating;
   }
 
+  bool _isDragOverCloseButton(Offset globalPosition) {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final localPosition = renderBox.globalToLocal(globalPosition);
+    print("localPosition: $localPosition");
+    final closeButtonRect = Rect.fromLTRB(
+      (renderBox.size.width / 2),
+      renderBox.size.height - 100,
+      (renderBox.size.width / 2),
+      40,
+    );
+    print("closeButtonRect: $closeButtonRect");
+    return closeButtonRect.contains(localPosition);
+  }
+
   void _onPanUpdate(DragUpdateDetails details) {
     if (!_isDragging) return;
     setState(() {
@@ -138,6 +160,8 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
         details.delta.dx,
         details.delta.dy,
       );
+
+      _isOverCloseButton = _isDragOverCloseButton(details.globalPosition);
     });
   }
 
@@ -152,6 +176,16 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
 
   void _onPanEnd(DragEndDetails details) {
     if (!_isDragging) return;
+
+    // Check if drag ended over the Close button
+    if (_isOverCloseButton) {
+      widget.onCloseView
+          ?.call(); // Call the close function if over Close button
+      _isOverCloseButton = false; // Reset the tracking variable
+      _pipViewState = PIPViewSize.full;
+      _scaleAnimationController.reverse(); // Reverse the scale animation
+      return; // Skip the rest of the logic
+    }
 
     final nearestCorner = _calculateNearestCorner(
       offset: _dragOffset,
@@ -192,10 +226,17 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
 
   void _onDoubleTap() {
     _notifyInteraction(true);
+
     if (_pipViewState == PIPViewSize.medium) {
-      _scaleAnimationController.reverse(); // Reverse the scale animation
-      setState(() {
-        _pipViewState = PIPViewSize.small;
+      // setState(() {
+      //   _pipViewState = PIPViewSize.small;
+      //   widget.onPIPViewSizeChange?.call(_pipViewState);
+      // });
+      // _scaleAnimationController.reverse(); // Reverse the scale animation
+      _scaleAnimationController.reverse().whenComplete(() {
+        setState(() {
+          _pipViewState = PIPViewSize.small;
+        });
         widget.onPIPViewSizeChange?.call(_pipViewState);
       });
     }
@@ -256,7 +297,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           floatingHeight = height / width * floatingWidth;
         }
 
-        _mediumSize = Size(floatingWidth * 1.5, floatingHeight * 1.5);
+        _mediumSize = Size(floatingWidth * 1.3, floatingHeight * 1.3);
 
         final floatingWidgetSize =
             _getFloatingSize(floatingWidth, floatingHeight);
@@ -286,6 +327,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                 animation: Listenable.merge([
                   _toggleFloatingAnimationController,
                   _dragAnimationController,
+                  _scaleAnimationController,
                 ]),
                 builder: (context, child) {
                   final animationCurve = CurveTween(
@@ -310,20 +352,35 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                     begin: 0,
                     end: 10,
                   ).transform(toggleFloatingAnimationValue);
-                  final width = Tween<double>(
-                    begin: fullWidgetSize.width,
-                    end: floatingWidgetSize.width,
-                  ).transform(toggleFloatingAnimationValue);
-                  final height = Tween<double>(
-                    begin: fullWidgetSize.height,
-                    end: floatingWidgetSize.height,
-                  ).transform(toggleFloatingAnimationValue);
-                  final scale = _pipViewState == PIPViewSize.medium
-                      ? _scaleAnimation.value
-                      : Tween<double>(
-                          begin: 1,
-                          end: scaledDownScale,
-                        ).transform(toggleFloatingAnimationValue);
+
+                  // final width = Tween<double>(
+                  //   begin: fullWidgetSize.width,
+                  //   end: floatingWidgetSize.width,
+                  // ).transform(toggleFloatingAnimationValue);
+                  // final height = Tween<double>(
+                  //   begin: fullWidgetSize.height,
+                  //   end: floatingWidgetSize.height,
+                  // ).transform(toggleFloatingAnimationValue);
+                  // final scale = _pipViewState == PIPViewSize.medium
+                  //     ? _scaleAnimation.value
+                  //     : Tween<double>(
+                  //         begin: 1,
+                  //         end: scaledDownScale,
+                  //       ).transform(toggleFloatingAnimationValue);
+                  double currentWidth, currentHeight;
+                  if (_pipViewState == PIPViewSize.medium) {
+                    currentWidth = _mediumSize!.width;
+                    currentHeight = _mediumSize!.height;
+                  } else {
+                    currentWidth = Tween<double>(
+                      begin: fullWidgetSize.width,
+                      end: floatingWidgetSize.width,
+                    ).transform(toggleFloatingAnimationValue);
+                    currentHeight = Tween<double>(
+                      begin: fullWidgetSize.height,
+                      end: floatingWidgetSize.height,
+                    ).transform(toggleFloatingAnimationValue);
+                  }
 
                   return Positioned(
                     left: floatingOffset.dx,
@@ -333,9 +390,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                       onPanUpdate: _isFloating ? _onPanUpdate : null,
                       onPanCancel: _isFloating ? _onPanCancel : null,
                       onPanEnd: _isFloating ? _onPanEnd : null,
-                      onTap: () {
-                        _onSingleTap();
-                      },
+                      onTap: _onSingleTap,
                       onDoubleTap: () {
                         if (widget.onDoubleTapTopWidget != null &&
                             _pipViewState == PIPViewSize.medium) {
@@ -352,19 +407,12 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                             color: Colors.transparent,
                             borderRadius: BorderRadius.circular(borderRadius),
                           ),
-                          // width: width,
-                          // height: height,
-                          width: _pipViewState == PIPViewSize.medium
-                              ? floatingWidgetSize.width
-                              : fullWidgetSize.width,
-                          height: _pipViewState == PIPViewSize.medium
-                              ? floatingWidgetSize.height
-                              : fullWidgetSize.height,
+                          width: currentWidth,
+                          height: currentHeight,
                           child: OverflowBox(
-                            alignment: Alignment.center,
                             maxHeight: fullWidgetSize.height,
                             maxWidth: fullWidgetSize.width,
-                            child: child, // Child remains at its original scale
+                            child: child,
                           ),
                           // Transform.scale(
                           //   scale: scale,
@@ -380,6 +428,16 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                   );
                 },
                 child: widget.topWidget,
+              ),
+            if (_isDragging)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: ElevatedButton.icon(
+                  icon: Icon(Icons.close),
+                  style: ElevatedButton.styleFrom(),
+                  onPressed: null,
+                  label: const Text('Close'),
+                ),
               ),
           ],
         );
