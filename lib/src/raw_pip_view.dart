@@ -15,6 +15,7 @@ class RawPIPView extends StatefulWidget {
   final double? floatingWidth;
   final double? floatingHeight;
   final bool avoidKeyboard;
+  final bool? isInteractive;
   final Widget? topWidget;
   final Widget? bottomWidget;
   final PIPViewSize? pipViewState;
@@ -37,6 +38,7 @@ class RawPIPView extends StatefulWidget {
     this.floatingWidth,
     this.floatingHeight,
     this.avoidKeyboard = true,
+    this.isInteractive,
     this.topWidget,
     this.bottomWidget,
     this.pipViewState,
@@ -54,7 +56,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   late final AnimationController _toggleFloatingAnimationController;
   late final AnimationController _dragAnimationController;
   late final AnimationController _scaleAnimationController;
-  late Animation<double> _scaleAnimation;
+  // late Animation<double> _scaleAnimation;
   late PIPViewSize _pipViewState;
 
   late PIPViewCorner _corner;
@@ -87,12 +89,12 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           const Duration(milliseconds: 300), // Duration for the scale animation
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
-      CurvedAnimation(
-        parent: _scaleAnimationController,
-        curve: Curves.easeInOut,
-      ),
-    );
+    // _scaleAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
+    //   CurvedAnimation(
+    //     parent: _scaleAnimationController,
+    //     curve: Curves.easeInOut,
+    //   ),
+    // );
     _pipViewState = widget.pipViewState ?? PIPViewSize.full;
   }
 
@@ -103,6 +105,9 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
       setState(() {
         _pipViewState = widget.pipViewState ?? PIPViewSize.small;
       });
+    }
+    if (oldWidget.isInteractive != widget.isInteractive) {
+      _notifyInteraction(widget.isInteractive ?? false);
     }
     if (_isFloating) {
       if (widget.topWidget == null || widget.bottomWidget == null) {
@@ -142,14 +147,18 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   bool _isDragOverCloseButton(Offset globalPosition) {
     final renderBox = context.findRenderObject() as RenderBox;
     final localPosition = renderBox.globalToLocal(globalPosition);
-    print("localPosition: $localPosition");
-    final closeButtonRect = Rect.fromLTRB(
-      (renderBox.size.width / 2),
-      renderBox.size.height - 100,
-      (renderBox.size.width / 2),
-      40,
+
+    // Set dimensions to match the button size (and add buffer for user convenience)
+    final buttonWidth = 100.0; // Use the button width from the SizedBox
+    final buttonHeight = 40.0; // Use the button height from the SizedBox
+    final buffer = 20.0; // Buffer to make the hit area slightly larger
+
+    final closeButtonRect = Rect.fromLTWH(
+      (renderBox.size.width - buttonWidth) / 2 - buffer,
+      renderBox.size.height - buttonHeight - buffer,
+      buttonWidth + buffer * 2,
+      buttonHeight + buffer * 2,
     );
-    print("closeButtonRect: $closeButtonRect");
     return closeButtonRect.contains(localPosition);
   }
 
@@ -182,8 +191,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
       widget.onCloseView
           ?.call(); // Call the close function if over Close button
       _isOverCloseButton = false; // Reset the tracking variable
-      _pipViewState = PIPViewSize.full;
-      _scaleAnimationController.reverse(); // Reverse the scale animation
       return; // Skip the rest of the logic
     }
 
@@ -228,11 +235,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     _notifyInteraction(true);
 
     if (_pipViewState == PIPViewSize.medium) {
-      // setState(() {
-      //   _pipViewState = PIPViewSize.small;
-      //   widget.onPIPViewSizeChange?.call(_pipViewState);
-      // });
-      // _scaleAnimationController.reverse(); // Reverse the scale animation
       _scaleAnimationController.reverse().whenComplete(() {
         setState(() {
           _pipViewState = PIPViewSize.small;
@@ -312,12 +314,12 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
 
         final calculatedOffset = _offsets[_corner];
 
-        // BoxFit.cover
-        final widthRatio = floatingWidth / width;
-        final heightRatio = floatingHeight / height;
-        final scaledDownScale = widthRatio > heightRatio
-            ? floatingWidgetSize.width / fullWidgetSize.width
-            : floatingWidgetSize.height / fullWidgetSize.height;
+        // // BoxFit.cover
+        // final widthRatio = floatingWidth / width;
+        // final heightRatio = floatingHeight / height;
+        // final scaledDownScale = widthRatio > heightRatio
+        //     ? floatingWidgetSize.width / fullWidgetSize.width
+        //     : floatingWidgetSize.height / fullWidgetSize.height;
 
         return Stack(
           children: <Widget>[
@@ -353,20 +355,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                     end: 10,
                   ).transform(toggleFloatingAnimationValue);
 
-                  // final width = Tween<double>(
-                  //   begin: fullWidgetSize.width,
-                  //   end: floatingWidgetSize.width,
-                  // ).transform(toggleFloatingAnimationValue);
-                  // final height = Tween<double>(
-                  //   begin: fullWidgetSize.height,
-                  //   end: floatingWidgetSize.height,
-                  // ).transform(toggleFloatingAnimationValue);
-                  // final scale = _pipViewState == PIPViewSize.medium
-                  //     ? _scaleAnimation.value
-                  //     : Tween<double>(
-                  //         begin: 1,
-                  //         end: scaledDownScale,
-                  //       ).transform(toggleFloatingAnimationValue);
                   double currentWidth, currentHeight;
                   if (_pipViewState == PIPViewSize.medium) {
                     currentWidth = _mediumSize!.width;
@@ -414,14 +402,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                             maxWidth: fullWidgetSize.width,
                             child: child,
                           ),
-                          // Transform.scale(
-                          //   scale: scale,
-                          //   child: OverflowBox(
-                          //     maxHeight: fullWidgetSize.height,
-                          //     maxWidth: fullWidgetSize.width,
-                          //     child: child,
-                          //   ),
-                          // ),
                         ),
                       ),
                     ),
@@ -432,11 +412,40 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
             if (_isDragging)
               Align(
                 alignment: Alignment.bottomCenter,
-                child: ElevatedButton.icon(
-                  icon: Icon(Icons.close),
-                  style: ElevatedButton.styleFrom(),
-                  onPressed: null,
-                  label: const Text('Close'),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Container(
+                    width: 110.0,
+                    height: 40.0,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 15),
+                    decoration: BoxDecoration(
+                      color: _isOverCloseButton
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.onSecondary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.close,
+                          color: _isOverCloseButton ? Colors.white : null,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Close',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                color: _isOverCloseButton ? Colors.white : null,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
           ],
