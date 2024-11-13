@@ -25,7 +25,7 @@ class RawPIPView extends StatefulWidget {
   // causes the tap to be lost sometimes because it
   // is competing with the drag
   final void Function()? onDoubleTapTopWidget;
-  final void Function()? onCloseView;
+  final void Function()? onDragToClose;
 
   // Notify parent widget when RawPIPView is interactive or not
   final void Function(bool isInteractive)? onInteractionChange;
@@ -43,7 +43,7 @@ class RawPIPView extends StatefulWidget {
     this.bottomWidget,
     this.pipViewState,
     this.onDoubleTapTopWidget,
-    this.onCloseView,
+    this.onDragToClose,
     this.onInteractionChange,
     this.onPIPViewSizeChange,
   }) : super(key: key);
@@ -188,7 +188,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
 
     // Check if drag ended over the Close button
     if (_isOverCloseButton) {
-      widget.onCloseView
+      widget.onDragToClose
           ?.call(); // Call the close function if over Close button
       _isOverCloseButton = false; // Reset the tracking variable
       return; // Skip the rest of the logic
@@ -235,12 +235,11 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     _notifyInteraction(true);
 
     if (_pipViewState == PIPViewSize.medium) {
-      _scaleAnimationController.reverse().whenComplete(() {
-        setState(() {
-          _pipViewState = PIPViewSize.small;
-        });
-        widget.onPIPViewSizeChange?.call(_pipViewState);
+      setState(() {
+        _pipViewState = PIPViewSize.full;
       });
+      _scaleAnimationController.reverse();
+      widget.onPIPViewSizeChange?.call(_pipViewState);
     }
     _inactivityTimer?.cancel(); // Cancel the inactivity timer
   }
@@ -378,7 +377,11 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                       onPanUpdate: _isFloating ? _onPanUpdate : null,
                       onPanCancel: _isFloating ? _onPanCancel : null,
                       onPanEnd: _isFloating ? _onPanEnd : null,
-                      onTap: _onSingleTap,
+                      onTap: () {
+                        if (_pipViewState == PIPViewSize.small) {
+                          _onSingleTap();
+                        }
+                      },
                       onDoubleTap: () {
                         if (widget.onDoubleTapTopWidget != null &&
                             _pipViewState == PIPViewSize.medium) {
@@ -386,6 +389,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                           widget.onDoubleTapTopWidget!();
                         }
                       },
+                      behavior: HitTestBehavior.translucent,
                       child: Material(
                         elevation: 10,
                         borderRadius: BorderRadius.circular(borderRadius),

@@ -12,7 +12,7 @@ class PIPView extends StatefulWidget {
   final PIPViewSize? pipViewState;
 
   final void Function()? onDoubletapPIPView;
-  final void Function()? onClosePIPView;
+  final void Function()? onDragToClose;
   final void Function(bool isInteractive)? onInteractionChange;
   final void Function(PIPViewSize size)? onPIPViewSizeChange;
 
@@ -31,7 +31,7 @@ class PIPView extends StatefulWidget {
     this.avoidKeyboard = true,
     this.isInteractive,
     this.onDoubletapPIPView,
-    this.onClosePIPView,
+    this.onDragToClose,
     this.onInteractionChange,
     this.onPIPViewSizeChange,
   }) : super(key: key);
@@ -92,8 +92,8 @@ class PIPViewState extends State<PIPView> with TickerProviderStateMixin {
       initialCorner: widget.initialCorner,
       onInteractionChange: widget.onInteractionChange,
       onPIPViewSizeChange: widget.onPIPViewSizeChange,
-      onCloseView: () {
-        widget.onClosePIPView?.call();
+      onDragToClose: () {
+        widget.onDragToClose?.call();
       },
     );
   }
