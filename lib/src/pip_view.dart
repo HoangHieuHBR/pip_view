@@ -82,7 +82,7 @@ class PIPViewState extends State<PIPView> with TickerProviderStateMixin {
               widget.onDoubletapPIPView?.call();
             },
       topWidget: IgnorePointer(
-        ignoring: isFloating,
+        ignoring: isFloating && widget.pipViewState == PIPViewSize.small,
         child: Builder(
           builder: (context) => widget.builder(context, isFloating),
         ),

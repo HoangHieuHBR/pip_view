@@ -66,6 +66,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   Widget? _bottomWidgetGhost;
   Size? _mediumSize;
   Map<PIPViewCorner, Offset> _offsets = {};
+  Map<PIPViewPosition, Offset> _positionOffsets = {};
 
   Timer? _inactivityTimer;
   static const Duration inactivityDuration = Duration(seconds: 5);
@@ -89,12 +90,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           const Duration(milliseconds: 300), // Duration for the scale animation
       vsync: this,
     );
-    // _scaleAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
-    //   CurvedAnimation(
-    //     parent: _scaleAnimationController,
-    //     curve: Curves.easeInOut,
-    //   ),
-    // );
     _pipViewState = widget.pipViewState ?? PIPViewSize.full;
   }
 
@@ -138,6 +133,20 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
       windowPadding: windowPadding,
     );
   }
+
+  // void _updatePositionsOffsets({
+  //   required Size spaceSize,
+  //   required Size widgetSize,
+  //   required EdgeInsets windowPadding,
+  //   double snapPadding = 16.0,
+  // }) {
+  //   _positionOffsets = _calculatePositionOffsets(
+  //     spaceSize: spaceSize,
+  //     widgetSize: widgetSize,
+  //     windowPadding: windowPadding,
+  //     snapPadding: snapPadding,
+  //   );
+  // }
 
   bool _isAnimating() {
     return _toggleFloatingAnimationController.isAnimating ||
@@ -198,6 +207,10 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
       offset: _dragOffset,
       offsets: _offsets,
     );
+    // final nearestPosition = _calculateNearestPosition(
+    //   offset: _dragOffset,
+    //   offsets: _positionOffsets,
+    // );
     setState(() {
       _corner = nearestCorner;
       _isDragging = false;
@@ -205,7 +218,6 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
     _dragAnimationController.forward().whenCompleteOrCancel(() {
       _dragAnimationController.value = 0;
       _dragOffset = Offset.zero;
-
       _startInactivityTimer();
     });
   }
@@ -247,7 +259,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
   void _startInactivityTimer() {
     _inactivityTimer?.cancel(); // Cancel existing timer if any
     _inactivityTimer = Timer(inactivityDuration, () {
-      if (mounted) {
+      if (mounted && _pipViewState != PIPViewSize.full) {
         _scaleAnimationController.reverse(); // Reverse the scale animation
         setState(() {
           _pipViewState = PIPViewSize.small; // Minimize to small size
@@ -311,14 +323,13 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
           windowPadding: windowPadding,
         );
 
-        final calculatedOffset = _offsets[_corner];
+        // _updatePositionsOffsets(
+        //   spaceSize: fullWidgetSize,
+        //   widgetSize: floatingWidgetSize,
+        //   windowPadding: windowPadding,
+        // );
 
-        // // BoxFit.cover
-        // final widthRatio = floatingWidth / width;
-        // final heightRatio = floatingHeight / height;
-        // final scaledDownScale = widthRatio > heightRatio
-        //     ? floatingWidgetSize.width / fullWidgetSize.width
-        //     : floatingWidgetSize.height / fullWidgetSize.height;
+        final calculatedOffset = _offsets[_corner];
 
         return Stack(
           children: <Widget>[
@@ -377,11 +388,7 @@ class RawPIPViewState extends State<RawPIPView> with TickerProviderStateMixin {
                       onPanUpdate: _isFloating ? _onPanUpdate : null,
                       onPanCancel: _isFloating ? _onPanCancel : null,
                       onPanEnd: _isFloating ? _onPanEnd : null,
-                      onTap: () {
-                        if (_pipViewState == PIPViewSize.small) {
-                          _onSingleTap();
-                        }
-                      },
+                      onTap: _onSingleTap,
                       onDoubleTap: () {
                         if (widget.onDoubleTapTopWidget != null &&
                             _pipViewState == PIPViewSize.medium) {
@@ -532,6 +539,112 @@ Map<PIPViewCorner, Offset> _calculateOffsets({
   final Map<PIPViewCorner, Offset> offsets = {};
   for (final corner in corners) {
     offsets[corner] = getOffsetForCorner(corner);
+  }
+
+  return offsets;
+}
+
+enum PIPViewPosition {
+  topLeft,
+  bottomLeft,
+  topRight,
+  bottomRight,
+  leftSide,
+  rightSide,
+}
+
+class _PositionDistance {
+  final PIPViewPosition position;
+  final double distance;
+
+  _PositionDistance({
+    required this.position,
+    required this.distance,
+  });
+}
+
+PIPViewPosition _calculateNearestPosition({
+  required Offset offset,
+  required Map<PIPViewPosition, Offset> offsets,
+}) {
+  _PositionDistance calculateDistance(PIPViewPosition position) {
+    final distance = offsets[position]!
+        .translate(
+          -offset.dx,
+          -offset.dy,
+        )
+        .distanceSquared;
+    return _PositionDistance(
+      position: position,
+      distance: distance,
+    );
+  }
+
+  final distances = PIPViewPosition.values.map(calculateDistance).toList();
+
+  distances.sort((pd0, pd1) => pd0.distance.compareTo(pd1.distance));
+
+  return distances.first.position;
+}
+
+Map<PIPViewPosition, Offset> _calculatePositionOffsets({
+  required Size spaceSize,
+  required Size widgetSize,
+  required EdgeInsets windowPadding,
+  double snapPadding = 16.0,
+}) {
+  Offset getOffsetForPosition(PIPViewPosition position, {double? yPosition}) {
+    final left = snapPadding + windowPadding.left;
+    final top = snapPadding + windowPadding.top;
+    final right =
+        spaceSize.width - widgetSize.width - windowPadding.right - snapPadding;
+    final bottom = spaceSize.height -
+        widgetSize.height -
+        windowPadding.bottom -
+        snapPadding;
+
+    switch (position) {
+      case PIPViewPosition.topLeft:
+        return Offset(left, top);
+      case PIPViewPosition.bottomLeft:
+        return Offset(left, bottom);
+      case PIPViewPosition.topRight:
+        return Offset(right, top);
+      case PIPViewPosition.bottomRight:
+        return Offset(right, bottom);
+      case PIPViewPosition.leftSide:
+        return Offset(left, yPosition ?? top);
+      case PIPViewPosition.rightSide:
+        return Offset(right, yPosition ?? top);
+      default:
+        throw UnimplementedError();
+    }
+  }
+
+  final Map<PIPViewPosition, Offset> offsets = {};
+
+  // Snap points for corners
+  offsets[PIPViewPosition.topLeft] =
+      getOffsetForPosition(PIPViewPosition.topLeft);
+  offsets[PIPViewPosition.bottomLeft] =
+      getOffsetForPosition(PIPViewPosition.bottomLeft);
+  offsets[PIPViewPosition.topRight] =
+      getOffsetForPosition(PIPViewPosition.topRight);
+  offsets[PIPViewPosition.bottomRight] =
+      getOffsetForPosition(PIPViewPosition.bottomRight);
+
+  // Snap points along left and right sides (create evenly spaced offsets along the side)
+  const sideSnapPoints = 8;
+  final sideStep =
+      (spaceSize.height - windowPadding.vertical - 2 * snapPadding) /
+          (sideSnapPoints - 1);
+
+  for (int i = 0; i < sideSnapPoints; i++) {
+    final yPosition = snapPadding + windowPadding.top + i * sideStep;
+    offsets[PIPViewPosition.leftSide] =
+        getOffsetForPosition(PIPViewPosition.leftSide, yPosition: yPosition);
+    offsets[PIPViewPosition.rightSide] =
+        getOffsetForPosition(PIPViewPosition.rightSide, yPosition: yPosition);
   }
 
   return offsets;
